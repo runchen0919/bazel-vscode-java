@@ -146,25 +146,33 @@ export namespace ProjectViewManager {
 			.then(() => displayFolders);
 	}
 
+	/**
+	 * Updates the project view for a multi-root workspace.
+	 * Adds directories from displayFolders as separate workspace folders in VSCode multi-root workspace.
+	 *
+	 * @param displayFolders List of directories to display
+	 * @returns The original displayFolders list
+	 */
 	function updateMultiRootProjectView(
 		displayFolders: string[]
 	): Thenable<string[]> {
+		// Build workspace folder entries array
+		const workspaceFolderEntries = [
+			// Add workspace root directory first
+			{ uri: Uri.file(workspaceRoot), name: workspaceRootName },
+			// Convert displayFolders to workspace folder entries
+			...displayFolders
+				// Filter out projectRootSymlinks directory (used for storing symlinks to root directory files)
+				.filter((f) => f !== projectRootSymlinks)
+				.map((f) => ({
+					uri: Uri.file(`${workspaceRoot}/${f}`),
+					name: f.replaceAll(sep, ' ⇾ '),
+				})),
+		];
 		workspace.updateWorkspaceFolders(
 			0,
 			workspace.workspaceFolders?.length,
-			...displayFolders.map((f) => {
-				if (f === projectRootSymlinks) {
-					return {
-						uri: Uri.file(projectRootSymlinks),
-						name: workspaceRootName,
-					};
-				} else {
-					return {
-						uri: Uri.file(`${workspaceRoot}/${f}`),
-						name: f.replaceAll(sep, ' ⇾ '),
-					};
-				}
-			})
+			...workspaceFolderEntries
 		);
 		return Promise.resolve(displayFolders);
 	}

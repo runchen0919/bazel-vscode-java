@@ -19,10 +19,15 @@ derive_targets_from_directories: true
 
 export function getWorkspaceRoot(): string {
 	if (workspace.workspaceFile) {
-		return dirname(workspace.workspaceFile.path);
+		let workspaceFileDir = dirname(workspace.workspaceFile.fsPath);
+		// If the workspace config file is in .vscode directory, go up one level to get the actual project root
+		if (workspaceFileDir.endsWith('.vscode')) {
+			workspaceFileDir = dirname(workspaceFileDir);
+		}
+		return workspaceFileDir;
 	} else {
 		if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
-			return workspace.workspaceFolders[0].uri.path;
+			return workspace.workspaceFolders[0].uri.fsPath;
 		}
 	}
 	throw new Error('invalid workspace root');
