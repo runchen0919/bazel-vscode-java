@@ -1,13 +1,4 @@
-import {
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	rmSync,
-	statSync,
-	symlinkSync,
-	writeFileSync,
-} from 'fs';
-import { homedir } from 'os';
+import { writeFileSync } from 'fs';
 import { sep } from 'path';
 import {
 	commands,
@@ -24,8 +15,17 @@ import { getVscodeConfig, getWorkspaceRoot } from './util';
 
 export namespace ProjectViewManager {
 	const workspaceRoot = getWorkspaceRoot();
-	const workspaceRootName = workspaceRoot.split('/').reverse()[0];
-	const projectRootSymlinks = `${homedir}${sep}${workspaceRootName}`;
+	const workspaceRootName = getWorkspaceRootName();
+
+	function getWorkspaceRootName(): string {
+		const name = workspaceRoot.split('/').reverse()[0];
+		if (!name || name.trim() === '') {
+			throw new Error(
+				`Invalid workspace root path, cannot extract name: ${workspaceRoot}`
+			);
+		}
+		return name;
+	}
 
 	export function isMultiRoot(): boolean {
 		return !!workspace.workspaceFile;
@@ -93,10 +93,6 @@ export namespace ProjectViewManager {
 
 	async function getDisplayFolders(): Promise<string[]> {
 		let displayFolders = new Set<string>(['.eclipse']); // TODO bubble this out to a setting
-		if (isMultiRoot()) {
-			syncWorkspaceRoot();
-			displayFolders.add(projectRootSymlinks);
-		}
 		try {
 			const bazelProjectFile = await getBazelProjectFile();
 			if (bazelProjectFile.directories.includes('.')) {
@@ -149,22 +145,21 @@ export namespace ProjectViewManager {
 	function updateMultiRootProjectView(
 		displayFolders: string[]
 	): Thenable<string[]> {
+		// 1. workspaceRoot as the first workspace folder, so ${workspaceFolder} resolves to the real project path
+		// 2. Other subdirectories serve as quick access entries
+		const workspaceFoldersToAdd = [
+			{ uri: Uri.file(workspaceRoot), name: workspaceRootName },
+			...displayFolders
+				.filter((f) => f !== '.') // Exclude '.' since workspaceRoot already represents the root directory
+				.map((f) => ({
+					uri: Uri.file(`${workspaceRoot}/${f}`),
+					name: f.replaceAll(sep, ' ⇾ '),
+				})),
+		];
 		workspace.updateWorkspaceFolders(
 			0,
 			workspace.workspaceFolders?.length,
-			...displayFolders.map((f) => {
-				if (f === projectRootSymlinks) {
-					return {
-						uri: Uri.file(projectRootSymlinks),
-						name: workspaceRootName,
-					};
-				} else {
-					return {
-						uri: Uri.file(`${workspaceRoot}/${f}`),
-						name: f.replaceAll(sep, ' ⇾ '),
-					};
-				}
-			})
+			...workspaceFoldersToAdd
 		);
 		return Promise.resolve(displayFolders);
 	}
@@ -257,25 +252,5 @@ export namespace ProjectViewManager {
 
 	function rootDirOnly(dirs: string[]): string[] {
 		return dirs.map((d) => d.split('/')[0]);
-	}
-
-	export function syncWorkspaceRoot() {
-		if (existsSync(projectRootSymlinks)) {
-			rmSync(projectRootSymlinks, { recursive: true }); // delete
-		}
-
-		mkdirSync(projectRootSymlinks);
-
-		readdirSync(workspaceRoot).forEach((f) => {
-			const fpath = `${workspaceRoot}${sep}${f}`;
-			if (existsSync(fpath)) {
-				const stats = statSync(fpath);
-				if (stats.isFile()) {
-					symlinkSync(fpath, `${projectRootSymlinks}${sep}${f}`);
-				}
-			}
-		});
-
-		commands.executeCommand('workbench.files.action.refreshFilesExplorer');
 	}
 }

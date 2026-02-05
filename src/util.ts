@@ -19,7 +19,11 @@ derive_targets_from_directories: true
 
 export function getWorkspaceRoot(): string {
 	if (workspace.workspaceFile) {
-		return dirname(workspace.workspaceFile.path);
+		const workspaceFilePath = dirname(workspace.workspaceFile.path);
+		if (workspaceFilePath.endsWith('.vscode')) {
+			return dirname(workspaceFilePath);
+		}
+		return workspaceFilePath;
 	} else {
 		if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
 			return workspace.workspaceFolders[0].uri.path;
