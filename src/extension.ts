@@ -1,11 +1,12 @@
 import { Span } from '@opentelemetry/api';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { format } from 'util';
 import {
 	ExtensionContext,
-	RelativePattern,
+	ProgressLocation,
 	TextDocument,
+	Uri,
 	commands,
 	extensions,
 	tasks,
@@ -24,6 +25,7 @@ import { BazelVscodeExtensionAPI } from './extension.api';
 import { registerLSClient } from './loggingTCPServer';
 import { ProjectViewManager } from './projectViewManager';
 import { BazelRunTargetProvider } from './provider/bazelRunTargetProvider';
+import { getModuleBuildFile } from './provider/bazelSyncStatusProvider';
 import { BazelTaskProvider } from './provider/bazelTaskProvider';
 import { ExtensionOtel, registerMetrics } from './tracing/otelUtils';
 import {
@@ -46,7 +48,9 @@ export async function activate(
 	// fetch all projects loaded into LS and display those as well
 	// show .eclipse folder
 	//
-	const enabled = workspace.getConfiguration('java.bazel-vscode').get('enabled');
+	const enabled = workspace
+		.getConfiguration('java.bazel-vscode')
+		.get('enabled');
 	if (!enabled) {
 		BazelLanguageServerTerminal.info(
 			'Bazel VSCode extension for Java is disabled. To enable it, set "java.bazel-vscode.enabled" to true in your settings.'
@@ -195,12 +199,83 @@ function syncProjectView(): void {
 	);
 }
 
-function updateClasspaths() {
+function updateClasspaths(moduleBuildFile?: Uri) {
 	if (!isRedhatJavaReady()) {
 		window.showErrorMessage(
 			'Unable to update classpath. Java language server is not ready'
 		);
 		return;
+	}
+
+	// Get BUILD file URI
+	const buildFileUri = getBuildFileUri(moduleBuildFile);
+	if (!buildFileUri) {
+		return; // Error already shown in getBuildFileUri
+	}
+
+	// Show progress notification
+	window.withProgress(
+		{
+			location: ProgressLocation.Notification,
+			title: 'Refreshing classpath',
+			cancellable: false,
+		},
+		async (progress) => {
+			progress.report({ message: 'Updating classpath from BUILD file...' });
+
+			try {
+				await executeJavaLanguageServerCommand(
+					Commands.UPDATE_CLASSPATHS,
+					buildFileUri.toString()
+				);
+
+				window.showInformationMessage(
+					'Classpath refresh completed successfully.'
+				);
+			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : String(error);
+				window.showErrorMessage(`Failed to refresh classpath: ${errorMessage}`);
+			}
+		}
+	);
+}
+
+/**
+ * Gets the BUILD file Uri from various sources.
+ * Returns undefined if no valid BUILD file can be found (and shows error message).
+ */
+function getBuildFileUri(moduleBuildFile?: Uri): Uri | undefined {
+	// If moduleBuildFile is provided, return it directly
+	if (moduleBuildFile) {
+		return moduleBuildFile;
+	}
+
+	// Otherwise, try to find BUILD file from active editor
+	const activeEditor = window.activeTextEditor;
+	if (!activeEditor) {
+		window.showErrorMessage(
+			'No BUILD file selected. Please open a BUILD file or select one in the explorer.'
+		);
+		return undefined;
+	}
+
+	const activeFileUri = activeEditor.document.uri;
+
+	// If current file is a BUILD file, use it
+	if (activeFileUri.fsPath.includes('BUILD')) {
+		return activeFileUri;
+	}
+
+	// Otherwise, search for BUILD file in parent directories
+	try {
+		const buildFilePath = getModuleBuildFile(dirname(activeFileUri.fsPath));
+		return Uri.file(buildFilePath);
+	} catch (error) {
+		window.showErrorMessage(
+			'No BUILD file found in the current directory or parent directories.'
+		);
+		return undefined;
 	}
 }
 

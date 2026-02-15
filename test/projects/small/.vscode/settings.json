@@ -3,9 +3,9 @@
 		"**/.git": true,
 		"**/.svn": true,
 		"**/.hg": true,
-		"**/CVS": true,
 		"**/.DS_Store": true,
 		"**/Thumbs.db": true,
+		"**/CVS": true,
 		".eclipse": false,
 		".vscode": false,
 		"module1": false,
@@ -20,6 +20,7 @@
 		"tools": false,
 		"bin": false
 	},
+	"java.bazel-vscode.enabled": true,
 	"java.bazel.log.level": "trace",
 	"java.showBuildStatusOnStart.enabled": "terminal",
 	"java.debug.logLevel": "verbose",

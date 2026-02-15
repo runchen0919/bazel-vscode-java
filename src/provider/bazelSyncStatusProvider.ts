@@ -74,17 +74,18 @@ export class BazelSyncStatusProvider implements TreeDataProvider<SyncStatus> {
 			).then(
 				(resp) => {
 					this.treeData = resp.data.map((cp) => {
-						const moduleBuildFile = getModuleBuildFile(cp.path);
+						const moduleBuildFilePath = getModuleBuildFile(cp.path);
+						const moduleBuildFileUri = Uri.file(moduleBuildFilePath);
 						return new SyncStatus(
 							cp.projectName,
 							workspace.createFileSystemWatcher(
-								new RelativePattern(path.dirname(moduleBuildFile), 'BUILD*')
+								new RelativePattern(path.dirname(moduleBuildFilePath), 'BUILD*')
 							),
 							TreeItemCollapsibleState.None,
 							{
 								title: 'sync module',
 								command: Commands.UPDATE_CLASSPATHS_CMD,
-								arguments: [moduleBuildFile],
+								arguments: [moduleBuildFileUri],
 							}
 						);
 					});
@@ -123,8 +124,12 @@ export class SyncStatus extends TreeItem {
 	}
 
 	iconPath = {
-		light: path.join(__filename, '..', 'resources', 'light', 'pass.svg'),
-		dark: path.join(__filename, '..', 'resources', 'dark', 'pass.svg'),
+		light: Uri.file(
+			path.join(__filename, '..', 'resources', 'light', 'pass.svg')
+		),
+		dark: Uri.file(
+			path.join(__filename, '..', 'resources', 'dark', 'pass.svg')
+		),
 	};
 
 	clearState() {
@@ -134,7 +139,7 @@ export class SyncStatus extends TreeItem {
 }
 
 // from a given starting dir, walk up the file tree until a BUILD file is found. return it
-function getModuleBuildFile(projectPath: string): string {
+export function getModuleBuildFile(projectPath: string): string {
 	if (existsSync(projectPath)) {
 		if (lstatSync(projectPath).isDirectory()) {
 			for (const x of readdirSync(projectPath)) {
