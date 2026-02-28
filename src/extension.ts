@@ -1,5 +1,5 @@
 import { Span } from '@opentelemetry/api';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { format } from 'util';
 import {
@@ -48,6 +48,10 @@ export async function activate(
 	// fetch all projects loaded into LS and display those as well
 	// show .eclipse folder
 	//
+
+	// Write java.bazel.enabled configuration to file for JDTLS layer
+	writeBazelEnabledConfig();
+
 	const enabled = workspace
 		.getConfiguration('java.bazel-vscode')
 		.get('enabled');
@@ -347,6 +351,45 @@ function openBazelProjectFile() {
 	} catch (err) {
 		window.showErrorMessage(
 			'Unable to open the bazel project file; invalid workspace'
+		);
+	}
+}
+
+/**
+ * Writes the java.bazel.enabled configuration to a file that JDTLS layer can read.
+ * This allows conditional activation of Bazel Java support based on workspace type.
+ */
+function writeBazelEnabledConfig() {
+	try {
+		// Read the java.bazel.enabled configuration
+		const config = workspace.getConfiguration('java.bazel');
+		const enabled = config.get<boolean>('enabled', false);
+
+		// Ensure we have a workspace root
+		if (!workspaceRoot) {
+			BazelLanguageServerTerminal.trace(
+				'No workspace root found, skipping Bazel enabled config write'
+			);
+			return;
+		}
+
+		// Create .vscode directory if it doesn't exist
+		const vscodeDir = join(workspaceRoot, '.vscode');
+		if (!existsSync(vscodeDir)) {
+			mkdirSync(vscodeDir, { recursive: true });
+		}
+
+		// Write the configuration file
+		const configFile = join(vscodeDir, '.bazel-java-enabled');
+		writeFileSync(configFile, enabled.toString(), 'utf8');
+
+		BazelLanguageServerTerminal.trace(
+			`Bazel Java support: ${enabled ? 'enabled' : 'disabled'}`
+		);
+	} catch (error) {
+		// Log error but don't fail activation
+		BazelLanguageServerTerminal.error(
+			`Failed to write Bazel enabled state: ${error}`
 		);
 	}
 }
