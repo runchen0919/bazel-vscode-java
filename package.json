@@ -1,6 +1,6 @@
 {
-	"name": "java-bazel-extension-compass",
-	"displayName": "Bazel extension for Java(TM) Language Support by Compass",
+	"name": "java-bazel-extension",
+	"displayName": "Bazel extension for Java(TM) Language Support by Compass Engineering",
 	"description": "Bazel extension for Java development with Intellisense, project sync, run targets, multi-root workspace, and buildifier integration.",
 	"author": "Compass",
 	"license": "BSD-3-Clause",
